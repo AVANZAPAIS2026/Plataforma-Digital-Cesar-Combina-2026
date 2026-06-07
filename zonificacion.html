@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Roberth Montoya | Presencia Publicitaria</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <link rel="stylesheet" href="css/styles.css?v=20260522-landing"/>
+</head>
+<body class="map-page">
+  <nav class="site-nav" aria-label="Navegación principal">
+    <div class="nav-inner">
+      <a class="brand" href="index.html" aria-label="Ir al inicio">
+        <span class="brand-mark">RM</span>
+        <span>Roberth Montoya</span>
+      </a>
+      <button class="nav-toggle" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-menu">
+        <li><a class="nav-link" href="index.html">Inicio</a></li>
+        <li><a class="nav-link" href="avance-campana.html">Avance Campaña</a></li>
+        <li><a class="nav-link active" href="presencia-publicitaria.html" aria-current="page">Presencia Publicitaria</a></li>
+        <li><a class="nav-link" href="sectores.html">Sectores y Sub-sectores</a></li>
+        <li><a class="nav-link" href="oposicion.html">Oposición</a></li>
+        <li><a class="nav-link" href="actividades.html">Actividades</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div id="loader"><div><div class="spin"></div><div class="spin-txt">Cargando mapa y datos...</div></div></div>
+
+  <header class="map-header">
+    <div class="map-header-top">
+      <div class="map-title">
+        <h1>Presencia Publicitaria</h1>
+        <div class="district">Distrito de San Borja · Lima, Perú</div>
+      </div>
+      <div id="hdr-count">Sin datos</div>
+    </div>
+    <div class="header-legend">
+      <div class="blk-title">Sectores</div>
+      <div class="leg-grid" id="leg-grid"></div>
+    </div>
+  </header>
+
+  <div id="map"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    // Control del menú responsive compartido.
+    const nav = document.querySelector('.site-nav');
+    const toggle = document.querySelector('.nav-toggle');
+    toggle.addEventListener('click', () => {
+      const isOpen = nav.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    // Columnas esperadas de la hoja, normalizadas a minúsculas y sin tildes.
+    const COL = {
+      latitud: 'latitud',
+      longitud: 'longitud',
+      direccion: 'direccion',
+      sector: 'sector',
+      tipo: 'tipo',
+    };
+
+    const LAT_KEYS = ['latitud', 'latitude', 'lat'];
+    const LON_KEYS = ['longitud', 'longitude', 'lng', 'lon', 'long'];
+    const GEOPOINT_KEYS = ['geopoint', 'geo_point', 'geo_point_2d', 'coordenadas', 'coordenada', 'ubicacion', 'ubicacion_gps', 'punto_gps'];
+
+    const GEOJSON_LAYER_COLOR = '#303E7F';
+    const PAINTED_LOT_COLOR = '#DB1774';
+    const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQcCVzStyWMu3K5-IpG1z_rMDRmpmAnRG9nmSD_nzM6j6B_NoO2o0sSvqqETBf8TrA43J-pLqD3G8Vx/pub?gid=52629814&single=true&output=tsv';
+    const GEOJSON_PATHS = [
+      'data/SAN_BORJA_LM_geogpsperu_SuyoPomalia.geojson',
+    ];
+
+    let map, lotesLayer, puntosLayer;
+    let lotesGeoJSON = null;
+    let rows = [];
+    let sectorCounts = {};
+    window._detectedSectorCol = null;
+
+    function initMap() {
+      map = L.map('map', { zoomControl: true, preferCanvas: true })
+        .setView([-12.105, -76.990], 14);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      loadLotes();
+    }
+
+    async function loadLotes() {
+      try {
+        const loaded = await fetchFirstGeoJSON(GEOJSON_PATHS);
+        lotesGeoJSON = loaded.data;
+        lotesLayer = L.geoJSON(lotesGeoJSON, {
+          style: geojsonLayerStyle,
+          onEachFeature: bindLoteEvents,
+        }).addTo(map);
+
+        if (lotesGeoJSON.features && lotesGeoJSON.features.length > 0) {
+          map.fitBounds(lotesLayer.getBounds(), { padding: [20, 20] });
+        }
+
+        document.getElementById('hdr-count').textContent =
+          `${lotesGeoJSON.features.length.toLocaleString()} lotes cargados`;
+        console.info(`GeoJSON cargado desde: ${loaded.path}`);
+
+        if (SHEETS_URL) {
+          fetchFromSheets(SHEETS_URL).catch(err => console.error('Error en Sheets:', err));
+        }
+      } catch (e) {
+        document.getElementById('hdr-count').textContent = `Error: ${e.message}`;
+        console.error('Detalle del error:', e);
+      } finally {
+        document.getElementById('loader').classList.add('gone');
+      }
+    }
+
+    async function fetchFirstGeoJSON(paths) {
+      const errors = [];
+      for (const path of paths) {
+        try {
+          const resp = await fetch(path, { cache: 'no-cache' });
+          if (!resp.ok) {
+            errors.push(`${path}: HTTP ${resp.status}`);
+            continue;
+          }
+          const data = await resp.json();
+          if (!data || !Array.isArray(data.features)) {
+            errors.push(`${path}: GeoJSON inválido`);
+            continue;
+          }
+          return { path, data };
+        } catch (err) {
+          errors.push(`${path}: ${err.message}`);
+        }
+      }
+      throw new Error(`GeoJSON no encontrado. Revisé: ${errors.join(' | ')}`);
+    }
+
+    function geojsonLayerStyle() {
+      return {
+        color: GEOJSON_LAYER_COLOR,
+        weight: .8,
+        fillColor: GEOJSON_LAYER_COLOR,
+        fillOpacity: .6,
+      };
+    }
+
+    function paintedLotStyle() {
+      return {
+        color: GEOJSON_LAYER_COLOR,
+        weight: .8,
+        fillColor: PAINTED_LOT_COLOR,
+        fillOpacity: .6,
+      };
+    }
+
+    function bindLoteEvents(feature, layer) {
+      layer.on({
+        mouseover(e) {
+          const s = feature.properties._sector;
+          const fillColor = s ? PAINTED_LOT_COLOR : GEOJSON_LAYER_COLOR;
+          e.target.setStyle({ weight: 2, color: GEOJSON_LAYER_COLOR, fillColor, fillOpacity: .92 });
+          const tip = s
+            ? `<b>Sector ${s}</b> · Lote #${feature.properties._lote_idx ?? '-'}<br>${feature.properties._puntos?.length ?? 0} registro(s)`
+            : `Lote #${feature.properties._lote_idx ?? '-'} · Sin datos`;
+          e.target.bindTooltip(tip, { className: 'lt-tip', sticky: true }).openTooltip();
+        },
+        mouseout(e) {
+          e.target.setStyle(e.target.feature.properties._sector ? paintedLotStyle() : geojsonLayerStyle());
+          e.target.closeTooltip();
+        },
+        click(e) {
+          const pts = feature.properties._puntos;
+          if (!pts?.length) return;
+          pts.length === 1
+            ? openSinglePopup(e.latlng, pts[0], feature)
+            : openMultiPopup(e.latlng, pts, feature);
+        },
+      });
+    }
+
+    function openSinglePopup(latlng, row, feature) {
+      const s = feature.properties._sector || '-';
+      const coords = getRowLatLon(row);
+      const lat = coords ? coords.lat.toFixed(5) : '-';
+      const lon = coords ? coords.lon.toFixed(5) : '-';
+
+      L.popup({ maxWidth: 300, minWidth: 280 })
+        .setLatLng(latlng)
+        .setContent(`
+          <div>
+            <div class="popup-header">
+              <div class="popup-sector-badge">S${s}</div>
+              <div class="popup-header-info">
+                <div class="ph-label">Sector ${s} · Lote #${feature.properties._lote_idx ?? '-'}</div>
+                <div class="ph-title">${row[COL.tipo] || 'Sin tipo'}</div>
+              </div>
+            </div>
+            <div class="popup-body">
+              <div class="popup-row">
+                <div class="pr-icon">T</div>
+                <div class="pr-content"><div class="pr-key">Tipo</div><div class="pr-val">${row[COL.tipo] || '-'}</div></div>
+              </div>
+              <div class="popup-row">
+                <div class="pr-icon">D</div>
+                <div class="pr-content"><div class="pr-key">Dirección</div><div class="pr-val">${row[COL.direccion] || '-'}</div></div>
+              </div>
+              <div class="popup-row">
+                <div class="pr-icon">S</div>
+                <div class="pr-content"><div class="pr-key">Sector</div><div class="pr-val">${row[COL.sector] || s}</div></div>
+              </div>
+            </div>
+            <div class="popup-footer">
+              <span class="pf-coords">${lat}, ${lon}</span>
+              <span class="pf-lote">Lote #${feature.properties._lote_idx ?? '-'}</span>
+            </div>
+          </div>`)
+        .openOn(map);
+    }
+
+    function openMultiPopup(latlng, pts, feature) {
+      const s = feature.properties._sector || '-';
+      const cards = pts.map((row, i) => `
+        <div class="pm-card" data-index="${i}">
+          <div class="pm-act">${row[COL.tipo] || '-'}</div>
+          <div class="pm-sub">${row[COL.direccion] || ''}</div>
+        </div>`).join('');
+
+      window._multiCtx = { pts, feature };
+
+      const popup = L.popup({ maxWidth: 300, minWidth: 280 })
+        .setLatLng(latlng)
+        .setContent(`
+          <div>
+            <div class="popup-header">
+              <div class="popup-sector-badge">S${s}</div>
+              <div class="popup-header-info">
+                <div class="ph-label">Sector ${s} · Lote #${feature.properties._lote_idx ?? '-'}</div>
+                <div class="ph-title">${pts.length} registros en este lote</div>
+              </div>
+            </div>
+            <div class="popup-multi">
+              <div class="pm-title">Selecciona un registro</div>
+              <div class="pm-list" id="pm-list">${cards}</div>
+            </div>
+          </div>`);
+
+      popup.on('add', function() {
+        const root = popup.getElement();
+        const pmCards = root ? root.querySelectorAll('.pm-card') : [];
+        pmCards.forEach(card => {
+          card.addEventListener('click', () => {
+            const index = parseInt(card.dataset.index, 10);
+            window.openCardFromMap(index);
+          });
+        });
+      });
+
+      popup.openOn(map);
+    }
+
+    window.openCardFromMap = (i) => {
+      const { pts, feature } = window._multiCtx;
+      const row = pts[i];
+      const coords = getRowLatLon(row);
+      const latlng = coords ? [coords.lat, coords.lon] : map.getCenter();
+      openSinglePopup(latlng, row, feature);
+    };
+
+    async function fetchFromSheets(url) {
+      try {
+        const targetUrl = normalizeSheetsUrl(url);
+        const resp = await fetch(targetUrl, { cache: 'no-cache' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: '' });
+        if (!parsed.data.length) throw new Error('La hoja está vacía o el formato no es correcto.');
+
+        ingestRows(parsed.data, 'Google Sheets');
+      } catch (e) {
+        console.error(`Error al cargar Google Sheets: ${e.message}`);
+      }
+    }
+
+    function normalizeSheetsUrl(url) {
+      const value = String(url || '').trim();
+      if (!value) throw new Error('No se proporcionó una URL válida.');
+      if (value.includes('/pub?') || value.includes('output=csv') || value.includes('output=tsv')) return value;
+      const idMatch = value.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      return idMatch ? `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv` : value;
+    }
+
+    function norm(k) {
+      return k.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .trim();
+    }
+
+    function parseNumber(value) {
+      if (value === null || value === undefined) return NaN;
+      if (typeof value === 'number') return value;
+      const cleaned = String(value)
+        .trim()
+        .replace(',', '.')
+        .match(/-?\d+(?:\.\d+)?/);
+      return cleaned ? parseFloat(cleaned[0]) : NaN;
+    }
+
+    function findValue(row, keys) {
+      for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== '') return row[key];
+      }
+      return undefined;
+    }
+
+    function parseGeoPoint(value) {
+      if (value === null || value === undefined || value === '') return null;
+
+      if (typeof value === 'object') {
+        const lat = parseNumber(value.latitude ?? value.lat ?? value._lat);
+        const lon = parseNumber(value.longitude ?? value.lng ?? value.lon ?? value.long ?? value._long);
+        return makeLatLon(lat, lon);
+      }
+
+      const text = String(value).trim();
+      const namedLat = text.match(/(?:latitud|latitude|lat)\s*[:=]\s*(-?\d+(?:[.,]\d+)?)/i);
+      const namedLon = text.match(/(?:longitud|longitude|lng|lon|long)\s*[:=]\s*(-?\d+(?:[.,]\d+)?)/i);
+      if (namedLat && namedLon) {
+        const lat = parseNumber(namedLat[1]);
+        const lon = parseNumber(namedLon[1]);
+        return makeLatLon(lat, lon);
+      }
+
+      const nums = text.match(/-?\d+(?:[.,]\d+)?/g);
+      if (!nums || nums.length < 2) return null;
+
+      const first = parseNumber(nums[0]);
+      const second = parseNumber(nums[1]);
+      return makeLatLon(first, second);
+    }
+
+    function makeLatLon(first, second) {
+      if (isValidLatLon(first, second)) {
+        if (Math.abs(first) > 60 && Math.abs(second) < 30) return { lat: second, lon: first };
+        return { lat: first, lon: second };
+      }
+      if (isValidLatLon(second, first)) return { lat: second, lon: first };
+      return null;
+    }
+
+    function isValidLatLon(lat, lon) {
+      return Number.isFinite(lat) && Number.isFinite(lon)
+        && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    }
+
+    function getRowLatLon(row) {
+      const lat = parseNumber(findValue(row, LAT_KEYS));
+      const lon = parseNumber(findValue(row, LON_KEYS));
+      const directCoords = makeLatLon(lat, lon);
+      if (directCoords) return directCoords;
+
+      for (const key of GEOPOINT_KEYS) {
+        const coords = parseGeoPoint(row[key]);
+        if (coords) return coords;
+      }
+
+      for (const value of Object.values(row)) {
+        const coords = parseGeoPoint(value);
+        if (coords) return coords;
+      }
+
+      return null;
+    }
+
+    function ingestRows(data, sourceName) {
+      rows = data.map(r => {
+        const o = {};
+        for (const k in r) o[norm(k)] = r[k];
+        return o;
+      });
+
+      const cols = Object.keys(rows[0] || {});
+      let autoCol = cols.find(c => c.toLowerCase().includes('sector')) || null;
+      if (!autoCol) {
+        for (const c of cols) {
+          const values = rows.map(r => parseInt(r[c], 10)).filter(v => !isNaN(v) && v >= 1 && v <= 12);
+          if (values.length > rows.length * .5) {
+            autoCol = c;
+            break;
+          }
+        }
+      }
+
+      if (autoCol) {
+        window._detectedSectorCol = autoCol;
+        applyToMap();
+      }
+    }
+
+    function applyToMap() {
+      if (!lotesGeoJSON || !rows.length) return;
+
+      const colSector = window._detectedSectorCol || 'sector';
+      if (puntosLayer) {
+        map.removeLayer(puntosLayer);
+        puntosLayer = null;
+      }
+
+      lotesGeoJSON.features.forEach(f => {
+        delete f.properties._sector;
+        delete f.properties._puntos;
+      });
+      sectorCounts = {};
+
+      const valid = rows
+        .map(row => ({ row, coords: getRowLatLon(row) }))
+        .filter(item => item.coords);
+
+      const invalidCoords = rows.length - valid.length;
+      if (invalidCoords > 0) {
+        console.warn(`${invalidCoords} fila(s) sin coordenadas válidas. Revisa columnas latitud/longitud o geopoint.`);
+      }
+
+      valid.forEach(({ row, coords }) => {
+        const { lat, lon } = coords;
+        const sector = parseInt(row[colSector], 10);
+        if (isNaN(sector) || sector < 1 || sector > 12) return;
+
+        const pt = turf.point([lon, lat]);
+        for (const feat of lotesGeoJSON.features) {
+          try {
+            if (turf.booleanPointInPolygon(pt, feat)) {
+              if (!feat.properties._puntos) {
+                feat.properties._puntos = [];
+                feat.properties._sector = sector;
+              }
+              feat.properties._puntos.push(row);
+              sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
+              break;
+            }
+          } catch (_) {}
+        }
+      });
+
+      lotesLayer.eachLayer(layer => {
+        layer.setStyle(layer.feature.properties._sector ? paintedLotStyle() : geojsonLayerStyle());
+      });
+
+      const markers = valid.map(({ row, coords }) => {
+        const { lat, lon } = coords;
+        const sector = parseInt(row[colSector], 10);
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:9px;height:9px;border-radius:50%;background:${PAINTED_LOT_COLOR};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)"></div>`,
+          iconSize: [9, 9],
+          iconAnchor: [4, 4],
+        });
+        const m = L.marker([lat, lon], { icon });
+        m.bindTooltip(`<b>Sector ${sector}</b> · ${row[COL.tipo] || '-'}`, { className: 'lt-tip', sticky: true });
+        m.on('click', () => {
+          const feat = lotesGeoJSON.features.find(f => f.properties._puntos?.includes(row));
+          if (feat) openSinglePopup([lat, lon], row, feat);
+        });
+        return m;
+      });
+
+      puntosLayer = L.layerGroup(markers).addTo(map);
+      renderLegend();
+
+      const lotes = lotesGeoJSON.features.filter(f => f.properties._sector).length;
+      document.getElementById('hdr-count').textContent =
+        `${lotesGeoJSON.features.length.toLocaleString()} lotes · ${valid.length} puntos · ${lotes} coloreados`;
+    }
+
+    function renderLegend() {
+      const grid = document.getElementById('leg-grid');
+      grid.innerHTML = '';
+      for (let s = 1; s <= 12; s++) {
+        const n = sectorCounts[s] || 0;
+        const div = document.createElement('div');
+        div.className = 'leg-item' + (n ? ' active' : '');
+        div.innerHTML = `
+          <div class="leg-dot"></div>
+          <div>
+            <div class="leg-name">Sector ${s}</div>
+            <div class="leg-count">${n ? `${n} punto${n !== 1 ? 's' : ''}` : '-'}</div>
+          </div>`;
+        grid.appendChild(div);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderLegend();
+      initMap();
+    });
+  </script>
+</body>
+</html>

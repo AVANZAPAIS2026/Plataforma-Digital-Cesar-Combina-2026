@@ -90,7 +90,7 @@
 
   <div class="search-panel">
     <div class="search-box">
-      <input type="text" id="addr-input" placeholder="Ingresa tu dirección (ej: Av. San Borja Norte 123)">
+      <input type="text" id="addr-input" placeholder="Ingresa tu dirección (ej: Av. Miguel Cervantes 530)">
       <button onclick="buscarDireccion()">🔍</button>
     </div>
     <div id="search-result">
@@ -122,7 +122,8 @@
       let n = String(name || 'S/N').toUpperCase();
       // Corrección específica para el subsector 1A
       if (n === 'SUB-SECT1' || n === 'SUB_SECT1') return '1A';
-      return n.replace(/_/g, ' ').replace(/-/g, ' ');
+      // Mantener el formato "a-x" con guión
+      return n.replace(/_/g, '-');
     }
 
     // Nueva instrucción visual para el usuario
@@ -171,9 +172,9 @@
     }
 
     // Carga el archivo desde la subcarpeta data
-    fetch('data/mapa_unificado.geojson')
+    fetch('data/sectores_san_isidro.geojson')
       .then(response => {
-        if (!response.ok) throw new Error(`No se encontró mapa_unificado.geojson (Error ${response.status})`);
+        if (!response.ok) throw new Error(`No se encontró sectores_san_isidro.geojson (Error ${response.status})`);
         return response.json();
       })
       .then(data => {

@@ -26,10 +26,10 @@ os.environ.setdefault("SHAPE_RESTORE_SHX", "YES")
 # ─────────────────────────────────────────────
 
 # Carpeta que contiene todos los .shp (busca también en subcarpetas)
-CARPETA_SHAPEFILES = "/Users/fabianvn/Desktop/Mapas Sebas/Capas/SUB-SECTORES"
+CARPETA_SHAPEFILES = "/Users/fabianvn/Desktop/Mapas Sebas/Capas/Shapefiles/SUB-SECTORES SAN ISIDRO"
 
 # Nombre del archivo de salida
-SALIDA_GEOJSON = "/Users/fabianvn/Desktop/Mapas Sebas/MAPA INTERACTIVO/data/mapa_unificado.geojson"
+SALIDA_GEOJSON = "/Users/fabianvn/Desktop/Mapas Sebas/MAPA INTERACTIVO SAN ISIDRO/data/sectores_san_isidro.geojson"
 
 # Si True, busca shapefiles dentro de subcarpetas también
 BUSCAR_RECURSIVO = True

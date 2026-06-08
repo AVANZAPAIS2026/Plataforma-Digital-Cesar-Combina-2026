@@ -23,8 +23,8 @@ import os
 os.environ.setdefault("SHAPE_RESTORE_SHX", "YES")
 
 # ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
-SHAPEFILE_PATH = "data/SAN_BORJA_LM_geogpsperu_SuyoPomalia.shp"       # Ruta a tu shapefile
-OUTPUT_PATH    = "data/SAN_BORJA_LM_geogpsperu_SuyoPomalia.geojson"   # Archivo de salida
+SHAPEFILE_PATH = "/Users/fabianvn/Desktop/Mapas Sebas/Capas/SAN_ISIDRO_LM_geogpsperu_SuyoPomalia/SAN_ISIDRO_LM_geogpsperu_SuyoPomalia.shp"  # Ruta a tu shapefile
+OUTPUT_PATH    = "data/SAN_ISIDRO_LM_geogpsperu_SuyoPomalia.geojson"   # Archivo de salida
 SIMPLIFY       = True                   # True recomendado para +1000 lotes
 SIMPLIFY_TOL   = 0.00005                # Tolerancia de simplificación (grados)
                                         # Reducir si los lotes son muy pequeños

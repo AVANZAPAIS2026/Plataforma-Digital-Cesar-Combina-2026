@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Roberth Montoya | Sectores y Sub-sectores</title>
+  <title>Cesar Combina | Sectores y Sub-sectores</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
   <link rel="stylesheet" href="css/styles.css?v=20260522-landing"/>
   <style>
@@ -59,8 +59,8 @@
   <nav class="site-nav" aria-label="Navegación principal">
     <div class="nav-inner">
       <a class="brand" href="index.html" aria-label="Ir al inicio">
-        <span class="brand-mark">RM</span>
-        <span>Roberth Montoya</span>
+        <span class="brand-mark">CC</span>
+        <span>Cesar Combina</span>
       </a>
       <button class="nav-toggle" type="button" aria-label="Abrir menú" aria-expanded="false">
         <span></span><span></span><span></span>
@@ -287,7 +287,7 @@
 
       try {
         // Motor de búsqueda de Esri (ArcGIS) - Mucho más preciso para numeración en Lima
-        const query = `${input}, San Borja, Lima, Peru`;
+        const query = `${input}, San Isidro, Lima, Peru`;
         const url = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(query)}&maxLocations=1&outFields=Match_addr,Addr_type`;
         
         const resp = await fetch(url);

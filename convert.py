@@ -2,7 +2,7 @@
 convert.py
 ----------
 Convierte el shapefile de lotes a GeoJSON optimizado para el mapa web.
-Compatible con distritos divididos en sectores (ej: San Borja, 12 sectores).
+Compatible con distritos divididos en sectores (ej: San Isidro, 5 sectores).
 
 Requisitos:
     pip install geopandas
